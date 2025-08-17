@@ -681,9 +681,6 @@ function App() {
           <CardContent className="space-y-4">
             {/* Sign-in / status row */}
             <div className="flex flex-wrap items-center gap-3 pt-2">
-              <div className="text-xs text-slate-600">
-                Google status: {signedIn ? "Signed in" : "Not signed in"}
-              </div>
 
               {!signedIn && (
                 <Button
