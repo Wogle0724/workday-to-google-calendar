@@ -401,6 +401,38 @@ function displayDatePlusOne(iso) {
   return dt.toLocaleDateString();    // format for UI
 }
 
+function FooterBar() {
+  return (
+    <footer className="fixed bottom-0 inset-x-0 border-t bg-white/95 backdrop-blur py-2">
+      <div className="mx-auto max-w-3xl px-4 flex items-center justify-between text-xs text-slate-600">
+        <div className="flex items-center gap-3">
+          <a href="/privacy" className="hover:underline">Privacy</a>
+          <span>•</span>
+          <a href="/terms" className="hover:underline">Terms</a>
+          <span>•</span>
+          <a
+            href="https://myaccount.google.com/permissions"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:underline"
+            title="Revoke this app’s Google access"
+          >
+            Revoke Google access
+          </a>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <a href="mailto:wyattjamesogle@gmail.com" className="hover:underline">
+            Contact
+          </a>
+          <span className="text-slate-400">© {new Date().getFullYear()}</span>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+
 function App() {
   const [rows, setRows] = useState([]);
   const [fileName, setFileName] = useState("");
@@ -896,8 +928,10 @@ function App() {
         </Card>
             <InstructionsPanel />
       </div>
+      <FooterBar />
     </div>
   );
 }
+
 
 export default App;
