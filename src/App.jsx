@@ -50,7 +50,7 @@ const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID; // e.g. 1234-abc
 const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY;
 const GOOGLE_CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET;
 // Scopes needed to insert events
-const SCOPES = "https://www.googleapis.com/auth/calendar";
+const SCOPES = "https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events";
 
 // Default timezone for created events
 const DEFAULT_TZ = "America/Chicago";
@@ -64,59 +64,77 @@ const COLS = {
   endDate: "End Date",
 };
 
+const CREATE_OPT = "__create__";
+
 // --- Add this in App.jsx (anywhere above the default export) ---
 function InstructionsPanel() {
   // Edit this array to change the content/order of steps
   const steps = [
     {
+      title: "1)",
       body:
-        "In Workday, from the main page, click on Menu in the top left corner",
+        "From the Workday home page, open the <strong>Menu</strong> in the top-left corner.",
       img: "/imgs/menu.png",
-      alt: "Workday export menu",
+      alt: "Workday menu",
     },
     {
+      title: "2)",
       body:
-        "In the dropdown, click Academics Hub",
+        "In the dropdown, select <strong>Academics Hub</strong>.",
       img: "/imgs/academics_hub.png",
+      alt: "Academics Hub option",
+    },
+    {
+      title: "3)",
+      body:
+        "Within Academics Hub, choose <strong>Current Classes</strong>.",
+      img: "/imgs/current_classes.png",
+      alt: "Current Classes page",
+    },
+    {
+      title: "4)",
+      body:
+        "In the top-right corner of the classes grid, click the <strong>Download</strong> button to export your schedule as an XLSX file.",
+      img: "/imgs/download.png",
+      alt: "Download button",
+    },
+    {
+      title: "5)",
+      body:
+        "Confirm that your XLSX file contains the correct headers and course details.",
+      img: "/imgs/excel.png",
+      alt: "XLSX file preview",
+    },
+    {
+      title: "6)",
+      body:
+        "On the Workday to Google Calendar website, click <strong>Sign in with Google</strong> and log in with your account.",
+      img: "/imgs/signin.png",
+      alt: "Google sign-in",
+    },
+    {
+      title: "7)",
+      body:
+        "Choose the Google Calendar you’d like to use, or create a new calendar for your courses.",
+      img: "/imgs/calendar.png",
+      alt: "Select calendar",
+    },
+    {
+      title: "8)",
+      body:
+        "Click <strong>Upload</strong> and select the XLSX file you downloaded from Workday.",
+      img: "/imgs/choose.png",
       alt: "Upload file",
     },
     {
+      title: "9)",
       body:
-        "From the Academics hub dropdown, click Current Classes",
-      img: "/imgs/current_classes.png",
-      alt: "Choose calendar",
-    },
-    {
-      body:
-        "In the top right corner, click on the download button to get an XLSX file.",
-      img: "/imgs/download.png",
-      alt: "Download ICS",
-    },
-    {
-      body:
-        "On the Workday to Google Calendar Website home page, click Sign in with Google and log in using the pop-up.",
-      img: "/imgs/signin.png",
-      alt: "Workday export menu",
-    },
-    {
-      body:
-        "Click the Upload button to select the XLSX file you downloaded.",
-      img: "/imgs/choose.png",
-      alt: "Workday export menu",
-    },
-    {
-      body:
-        "Select the calendar you want to add the events to (or create a new one)",
-      img: "/imgs/calendar.png",
-      alt: "Workday export menu",
-    },
-    {
-      body:
-        "Click Create in Google Calendar to add the events to your selected calendar",
+        "Click <strong>Create in Google Calendar</strong>. Your class schedule will be added automatically to the selected calendar.",
       img: "/imgs/create.png",
-      alt: "Workday export menu",
+      alt: "Create events in calendar",
     },
   ];
+  
 
   const [open, setOpen] = React.useState(true);
 
@@ -134,31 +152,30 @@ function InstructionsPanel() {
         </CardTitle>
       </CardHeader>
       {open && (
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-6">
           {steps.map((s, i) => (
-            <div key={i} className="grid gap-3 md:grid-cols-3 items-start">
-              <div className="md:col-span-1">
+            <div key={i} className="space-y-3">
+              {/* Title + Body side by side */}
+              <div className="flex flex-col md:flex-row md:items-center md:gap-4">
                 <div className="font-medium">{s.title}</div>
-                <p className="text-sm text-slate-600 mt-1">{s.body}</p>
+                <p className="text-sm text-slate-600 mt-1 md:mt-0" dangerouslySetInnerHTML={{ __html: s.body }}></p>
               </div>
-              <div className="md:col-span-2">
-                {/* Image uses public/ path like /imgs/menu.png */}
-                <img
-                  src={s.img}
-                  alt={s.alt}
-                  loading="lazy"
-                  className="w-full h-64 md:h-90 object-contain rounded-lg border bg-white"
-                />
 
-              </div>
+              {/* Image below, full width */}
+              <img
+                src={s.img}
+                alt={s.alt}
+                loading="lazy"
+                className="w-full h-64 md:h-90 object-contain rounded-lg border bg-white"
+              />
             </div>
           ))}
         </CardContent>
+
       )}
     </Card>
   );
 }
-
 
 // Util: normalize "URBAUER, Room 00222" → "Urbauer 222"
 function normalizeLocation(locationRaw) {
@@ -186,7 +203,6 @@ function cellToString(v) {
   return String(v);
 }
 
-
 // Util: parse meeting pattern → { days:["MO","WE"], startTime:"11:30 AM", endTime:"12:50 PM", location:"Urbauer 222" }
 function parseMeetingPattern(mp) {
   if (!mp) return null;
@@ -213,8 +229,6 @@ function parseMeetingPattern(mp) {
   const location = normalizeLocation(locationPart);
   return { days, startTime, endTime, location };
 }
-
-
 
 // Util: convert "11:30 AM" with a date to [hour, minute], 24h
 function parseHourMinute(timeStr) {
@@ -289,7 +303,6 @@ function waitFor(check, timeoutMs = 8000, intervalMs = 50) {
   });
 }
 
-
 async function ensureGapiReady() {
   if (gapiReady) return;
 
@@ -348,7 +361,6 @@ async function ensureToken() {
     tokenClient.requestAccessToken({ prompt: accessToken ? "none" : "consent", scope: SCOPES });
   });
 }
-
 
 const DOW = { SU:0, MO:1, TU:2, WE:3, TH:4, FR:5, SA:6 };
 
@@ -417,7 +429,34 @@ function App() {
     gapiInit();
   }, []);
   
-  
+  // inside App(), above pushToGoogle
+  const ensureTargetCalendarId = async () => {
+    // if user chose an existing calendar, just use it
+    if (selectedCalId !== CREATE_OPT) return selectedCalId;
+
+    // else they chose "<Create new>"
+    const name = (newCalName || "").trim();
+    if (!name) {
+      alert("Please enter a name for the new calendar.");
+      throw new Error("Missing new calendar name");
+    }
+
+    await ensureGapiReady(); // uses your existing helper
+
+    // Create the calendar
+    const res = await window.gapi.client.calendar.calendars.insert({
+      summary: name,
+    });
+    const newCal = res.result;
+
+    // Refresh the list and select it
+    await loadCalendars();
+    setSelectedCalId(newCal.id);
+    setNewCalName("");
+
+    return newCal.id;
+  };
+
 
   async function loadCalendars() {
     try {
@@ -532,8 +571,8 @@ function App() {
           return;
         }
     
-        // Try row 6 first (your header row), then fall back by scanning the first ~30 rows
-        let headerRowIndex = 6;
+        // Try row 3 first (your header row), then fall back by scanning the first ~30 rows
+        let headerRowIndex = 3;
         let headers = ws.getRow(headerRowIndex).values.slice(1).map(h => String(h || "").trim());
 
         const hasRequired = (arr) =>
@@ -610,10 +649,13 @@ function App() {
       await ensureToken();
       setSignedIn(true);
   
-      // show calendar name instead of ID
+      // Ensure we have a real calendar ID (create if needed)
+      const targetCalId = await ensureTargetCalendarId();
+  
+      // Nice-to-have: show the calendar name later
       const calName =
-        calendars.find(c => c.id === selectedCalId)?.summary ||
-        (selectedCalId === "primary" ? "Primary" : selectedCalId);
+        calendars.find((c) => c.id === targetCalId)?.summary ||
+        (targetCalId === "primary" ? "Primary" : targetCalId);
   
       for (const r of rows) {
         const mp = parseMeetingPattern(r.meetingPattern);
@@ -622,7 +664,6 @@ function App() {
         const [sh, sm] = parseHourMinute(startTime);
         const [eh, em] = parseHourMinute(endTime);
   
-        // start on the first meeting day ON/AFTER the provided startDate
         const firstDate = firstOccurrenceOnOrAfter(r.startDate, days);
   
         const event = {
@@ -634,19 +675,27 @@ function App() {
         };
   
         await window.gapi.client.calendar.events.insert({
-          calendarId: selectedCalId || "primary",
+          calendarId: targetCalId || "primary",
           resource: event,
         });
       }
   
-      alert(`Events created in "${calName}".`);
+      alert(`Events Created.`);
     } catch (e) {
-      console.error(e);
-      alert("Google Calendar insert failed. See console.");
+      try {
+        const parsed = e && e.body ? JSON.parse(e.body) : null;
+        console.error("Insert failed:", parsed?.error || e);
+        alert(parsed?.error?.message || "Google Calendar insert failed - Check XLSX Formatting");
+      } catch {
+        console.error(e);
+        alert("Google Calendar insert failed. See console.");
+      }
     } finally {
       setBusy(false);
     }
+    
   }
+  
   
   
 
@@ -656,7 +705,6 @@ function App() {
       await ensureToken();
       setSignedIn(true);
       await loadCalendars();
-      alert("Signed in to Google. You can now create events.");
     } catch (e) {
       console.error(e);
       alert("Google sign-in failed. See console.");
@@ -669,8 +717,8 @@ function App() {
   return (
     <div className="min-h-screen flex justify-center bg-white">
       <div className="w-full max-w-3xl px-4">
-      <h1 className="text-2xl md:text-3xl font-semibold text-slate-900 mb-2">
-        Workday to Google Calendar Scheduler
+      <h1 className="text-2xl md:text-3xl font-semibold text-slate-900 mb-2.5">
+        WashU Workday to Google Calendar Scheduler
       </h1>
         <Card className="shadow-sm">
           <CardHeader>
@@ -700,34 +748,35 @@ function App() {
 
               {signedIn && (
                 <div className="flex flex-wrap items-center gap-2 w-full">
-                  <div className="text-xs text-slate-600">Target Calendar:</div>
-                  {calendars.length > 0 ? (
-                    <select
-                      className="border rounded-md px-2 py-1"
-                      value={selectedCalId}
-                      onChange={(e) => setSelectedCalId(e.target.value)}
-                    >
-                      {calendars.map(c => (
-                        <option key={c.id} value={c.id}>
-                          {c.summary} {c.primary ? "(primary)" : ""}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <span className="text-xs text-slate-500">No calendars loaded</span>
-                  )}
-                  <div className="flex items-center gap-2">
+                  <div className="text-s text-slate-600">Target Calendar:</div>
+
+                  <select
+                    className="border rounded-md px-2 py-1"
+                    value={selectedCalId}
+                    onChange={(e) => setSelectedCalId(e.target.value)}
+                  >
+                    {/* Existing calendars */}
+                    {(calendars || []).map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.summary} {c.primary ? "(primary)" : ""}
+                      </option>
+                    ))}
+
+                    {/* Always add the create-new option at the bottom */}
+                    <option value={CREATE_OPT}>&lt;Create new&gt;</option>
+                  </select>
+
+                  {/* Only show the name input when "create new" is selected */}
+                  {selectedCalId === CREATE_OPT && (
                     <input
                       className="border rounded-md px-2 py-1"
-                      placeholder="New Calendar"
+                      placeholder="New calendar name"
                       value={newCalName}
                       onChange={(e) => setNewCalName(e.target.value)}
                     />
-                    <Button onClick={createCalendar} disabled={busy || !signedIn}>
-                      Create calendar
-                    </Button>
-                  </div>
+                  )}
                 </div>
+
               )}
             </div>
 
@@ -770,7 +819,11 @@ function App() {
                 <Button
                   type="button"
                   onClick={pushToGoogle}
-                  disabled={!rows.length || busy}
+                  disabled={
+                    busy ||
+                    !rows.length ||
+                    (selectedCalId === CREATE_OPT && !newCalName.trim())
+                  }
                   className="flex items-center"
                 >
                   {busy ? (
@@ -780,6 +833,7 @@ function App() {
                   )}
                   <span>Create in Google Calendar</span>
                 </Button>
+
               </>
             ) : (
               <div className="text-sm text-slate-600">
