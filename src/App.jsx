@@ -401,25 +401,38 @@ function buildDateTimeLocal(isoDateOrDate, hour, minute) {
   return `${y}-${pad(m)}-${pad(d)}T${pad(hour)}:${pad(minute)}:00`;
 }
 
+// Expand ["2025-10-04","2025-10-07"] to each ISO date; pass-through single dates.
+// IMPORTANT: parse/build using local time to avoid UTC -> local day shifts.
 function expandDaysOff(spec) {
   const out = [];
-  const add = (iso) => out.push(iso);
-  const iterRange = (a, b) => {
-    const s = new Date(a), e = new Date(b);
-    for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) {
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, "0");
-      const dd = String(d.getDate()).padStart(2, "0");
-      add(`${y}-${m}-${dd}`);
+
+  const makeLocalDate = (iso) => {
+    const [y, m, d] = iso.split("-").map(Number);
+    return new Date(y, m - 1, d); // local midnight
+  };
+  const toIso = (dateObj) => {
+    const y = dateObj.getFullYear();
+    const m = String(dateObj.getMonth() + 1).padStart(2, "0");
+    const d = String(dateObj.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  };
+
+  const iterRangeLocal = (startIso, endIso) => {
+    const start = makeLocalDate(startIso);
+    const end = makeLocalDate(endIso);
+    for (let cur = new Date(start); cur <= end; cur.setDate(cur.getDate() + 1)) {
+      out.push(toIso(cur));
     }
   };
 
   for (const item of spec) {
-    if (Array.isArray(item)) iterRange(item[0], item[1]);
-    else add(item);
+    if (Array.isArray(item)) iterRangeLocal(item[0], item[1]);
+    else out.push(item);
   }
+
   return out;
 }
+
 
 // Map for weekday codes
 const ISO_DOW = { 0:"SU", 1:"MO", 2:"TU", 3:"WE", 4:"TH", 5:"FR", 6:"SA" };
