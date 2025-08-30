@@ -26,6 +26,14 @@ const Card = ({ className="", children }) => (
 const CardHeader = ({ children }) => <div className="border-b px-4 py-3">{children}</div>;
 const CardTitle = ({ children, className="" }) => <h2 className={`font-semibold ${className}`}>{children}</h2>;
 const CardContent = ({ children, className="" }) => <div className={`px-4 py-4 ${className}`}>{children}</div>;
+// Academic calendar (days with no class)
+const DAYS_OFF_SPEC = [
+  "2025-09-01",                        // Labor Day
+  ["2025-10-04", "2025-10-07"],        // Fall break
+  ["2025-11-26", "2025-11-30"],        // Thanksgiving break
+  ["2025-12-08", "2025-12-10"],        // Reading days
+  ["2025-12-11", "2025-12-17"],        // Final exams
+];
 
 const Button = ({ children, className="", ...props }) => (
   <button className={`rounded-xl px-4 py-2 border bg-slate-900 text-white disabled:opacity-50 ${className}`} {...props}>
@@ -393,6 +401,40 @@ function buildDateTimeLocal(isoDateOrDate, hour, minute) {
   return `${y}-${pad(m)}-${pad(d)}T${pad(hour)}:${pad(minute)}:00`;
 }
 
+// Expand ["2025-10-04","2025-10-07"] to each ISO date; pass-through single dates
+function expandDaysOff(spec) {
+  const out = [];
+  const add = (iso) => out.push(iso);
+  const iterRange = (a, b) => {
+    const s = new Date(a), e = new Date(b);
+    for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      add(`${y}-${m}-${dd}`);
+    }
+  };
+
+  for (const item of spec) {
+    if (Array.isArray(item)) iterRange(item[0], item[1]);
+    else add(item);
+  }
+  return out;
+}
+
+// Build EXDATE lines for RFC 5545; chunk to keep lines reasonable
+function buildExdateLines(isoDates) {
+  if (!isoDates || !isoDates.length) return [];
+  const vals = isoDates.map((d) => d.replace(/-/g, "")); // YYYYMMDD
+  const lines = [];
+  const CHUNK = 20; // safe chunk size
+  for (let i = 0; i < vals.length; i += CHUNK) {
+    lines.push(`EXDATE;VALUE=DATE:${vals.slice(i, i + CHUNK).join(",")}`);
+  }
+  return lines;
+}
+
+
 function displayDatePlusOne(iso) {
   if (typeof iso !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso || "";
   const [y, m, d] = iso.split("-").map(Number);
@@ -443,6 +485,8 @@ function App() {
   const [calendars, setCalendars] = useState([]);
   const [selectedCalId, setSelectedCalId] = useState("primary");
   const [newCalName, setNewCalName] = useState("");
+  const allDaysOff = useMemo(() => expandDaysOff(DAYS_OFF_SPEC), []);
+
 
 
   // Handle sign-in state updates
@@ -698,12 +742,19 @@ function App() {
   
         const firstDate = firstOccurrenceOnOrAfter(r.startDate, days);
   
+        const offWithinCourse = allDaysOff.filter(d => d >= r.startDate && d <= r.endDate);
+        const exdateLines = buildExdateLines(offWithinCourse);
+        
         const event = {
           summary: `${r.course}${r.section ? ` (${r.section})` : ""}`,
           location,
           start: { dateTime: buildDateTimeLocal(firstDate, sh, sm), timeZone: tz },
           end:   { dateTime: buildDateTimeLocal(firstDate, eh, em), timeZone: tz },
-          recurrence: [`RRULE:${buildWeeklyRRule(days, r.endDate)}`],
+          // RRULE + EXDATE(s)
+          recurrence: [
+            `RRULE:${buildWeeklyRRule(days, r.endDate)}`,
+            ...exdateLines,
+          ],
         };
   
         await window.gapi.client.calendar.events.insert({
