@@ -401,7 +401,6 @@ function buildDateTimeLocal(isoDateOrDate, hour, minute) {
   return `${y}-${pad(m)}-${pad(d)}T${pad(hour)}:${pad(minute)}:00`;
 }
 
-// Expand ["2025-10-04","2025-10-07"] to each ISO date; pass-through single dates
 function expandDaysOff(spec) {
   const out = [];
   const add = (iso) => out.push(iso);
@@ -422,17 +421,41 @@ function expandDaysOff(spec) {
   return out;
 }
 
-// Build EXDATE lines for RFC 5545; chunk to keep lines reasonable
-function buildExdateLines(isoDates) {
-  if (!isoDates || !isoDates.length) return [];
-  const vals = isoDates.map((d) => d.replace(/-/g, "")); // YYYYMMDD
+// Map for weekday codes
+const ISO_DOW = { 0:"SU", 1:"MO", 2:"TU", 3:"WE", 4:"TH", 5:"FR", 6:"SA" };
+
+// Returns true if an ISO date (YYYY-MM-DD) matches any BYDAY in `days` (["MO","WE",...])
+function isoMatchesByDay(isoDate, days) {
+  const [y,m,d] = isoDate.split("-").map(Number);
+  const wd = new Date(y, m - 1, d).getDay(); // 0..6 (Sun..Sat)
+  return days.includes(ISO_DOW[wd]);
+}
+
+// Build EXDATEs as DATE-TIME (must match DTSTART's type), with TZID and the meeting's local start time.
+// Example: EXDATE;TZID=America/Chicago:20251004T113000
+function buildExdateDateTimeLines({ isoDates, startHour, startMinute, tz, byDays }) {
+  if (!isoDates?.length) return [];
+  // only exclude dates that actually fall on the class BYDAY set
+  const candidates = isoDates.filter(d => isoMatchesByDay(d, byDays));
+  if (!candidates.length) return [];
+
+  const stamp = (iso) => {
+    const [y,m,d] = iso.split("-");
+    const h = String(startHour).padStart(2, "0");
+    const mm = String(startMinute).padStart(2, "0");
+    return `${y}${m}${d}T${h}${mm}00`;
+  };
+
+  // Google accepts multiple date-times on one EXDATE line; chunk for readability
+  const vals = candidates.map(stamp);
+  const CHUNK = 20;
   const lines = [];
-  const CHUNK = 20; // safe chunk size
   for (let i = 0; i < vals.length; i += CHUNK) {
-    lines.push(`EXDATE;VALUE=DATE:${vals.slice(i, i + CHUNK).join(",")}`);
+    lines.push(`EXDATE;TZID=${tz}:${vals.slice(i, i + CHUNK).join(",")}`);
   }
   return lines;
 }
+
 
 
 function displayDatePlusOne(iso) {
@@ -741,21 +764,29 @@ function App() {
         const [eh, em] = parseHourMinute(endTime);
   
         const firstDate = firstOccurrenceOnOrAfter(r.startDate, days);
-  
+        
+        // days-off within the course window
         const offWithinCourse = allDaysOff.filter(d => d >= r.startDate && d <= r.endDate);
-        const exdateLines = buildExdateLines(offWithinCourse);
+        
+        // Build EXDATE as DATE-TIME (matching DTSTART) with TZID and local start time
+        const exdateLines = buildExdateDateTimeLines({
+          isoDates: offWithinCourse,
+          startHour: sh,
+          startMinute: sm,
+          tz,
+          byDays: days,
+        });
         
         const event = {
           summary: `${r.course}${r.section ? ` (${r.section})` : ""}`,
           location,
           start: { dateTime: buildDateTimeLocal(firstDate, sh, sm), timeZone: tz },
           end:   { dateTime: buildDateTimeLocal(firstDate, eh, em), timeZone: tz },
-          // RRULE + EXDATE(s)
           recurrence: [
             `RRULE:${buildWeeklyRRule(days, r.endDate)}`,
             ...exdateLines,
           ],
-        };
+        };        
   
         await window.gapi.client.calendar.events.insert({
           calendarId: targetCalId || "primary",
