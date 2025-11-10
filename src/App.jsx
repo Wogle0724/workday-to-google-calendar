@@ -33,6 +33,11 @@ const DAYS_OFF_SPEC = [
   ["2025-11-26", "2025-11-30"],        // Thanksgiving break
   ["2025-12-08", "2025-12-10"],        // Reading days
   ["2025-12-11", "2025-12-17"],        // Final exams
+  "2026-01-19",                        // MLK Day
+  ["2026-03-09", "2026-03-13"],        // Spring break
+  ["2026-04-27", "2026-04-29"],        // Reading days
+  ["2026-04-30", "2026-05-06"],        // Final exams
+
 ];
 
 const Button = ({ children, className="", ...props }) => (
