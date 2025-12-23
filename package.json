@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@vercel/analytics": "^1.6.1",
     "exceljs": "^4.4.0",
     "ics": "^3.8.1",
     "lucide-react": "^0.539.0",
