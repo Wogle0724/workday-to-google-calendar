@@ -932,7 +932,7 @@ function App() {
 
                   <div className="space-y-2">
                     <label className="text-sm font-medium ">
-                      Select your current time zone
+                      Select time zone for classes
                     </label>
                     <SimpleSelect
                       value={tz}
