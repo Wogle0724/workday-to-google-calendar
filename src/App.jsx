@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, CalendarPlus, FileDown, Upload, LogIn as Login, Calendar as CalendarIcon } from "lucide-react";
 import * as ExcelJS from "exceljs/dist/exceljs.min.js";
 import { createEvents } from "ics";
+import { DAYS_OFF_SPEC, buildRecurringCourseEvent, expandDaysOff } from "./calendarUtils.js";
 
 /**
  * Courses → ICS (single-file React app)
@@ -26,20 +27,6 @@ const Card = ({ className="", children }) => (
 const CardHeader = ({ children }) => <div className="border-b px-4 py-3">{children}</div>;
 const CardTitle = ({ children, className="" }) => <h2 className={`font-semibold ${className}`}>{children}</h2>;
 const CardContent = ({ children, className="" }) => <div className={`px-4 py-4 ${className}`}>{children}</div>;
-// Academic calendar (days with no class)
-const DAYS_OFF_SPEC = [
-  "2025-09-01",                        // Labor Day
-  ["2025-10-04", "2025-10-07"],        // Fall break
-  ["2025-11-26", "2025-11-30"],        // Thanksgiving break
-  ["2025-12-08", "2025-12-10"],        // Reading days
-  ["2025-12-11", "2025-12-17"],        // Final exams
-  "2026-01-19",                        // MLK Day
-  ["2026-03-09", "2026-03-13"],        // Spring break
-  ["2026-04-27", "2026-04-29"],        // Reading days
-  ["2026-04-30", "2026-05-06"],        // Final exams
-
-];
-
 const Button = ({ children, className="", ...props }) => (
   <button className={`rounded-xl px-4 py-2 border bg-slate-900 text-white disabled:opacity-50 ${className}`} {...props}>
     {children}
@@ -249,25 +236,6 @@ function parseHourMinute(timeStr) {
   return [d.getHours(), d.getMinutes()];
 }
 
-// Util: date → YYYYMMDD or YYYYMMDDTHHmmssZ for RRULE UNTIL (we'll use date-only in local tz converted to end-of-day UTC)
-function toICSDateParts(date, timeStr) {
-  // ics lib needs [YYYY, M, D, H, m]
-  const dt = new Date(date);
-  const [h, m] = timeStr ? parseHourMinute(timeStr) : [0, 0];
-  return [dt.getFullYear(), dt.getMonth() + 1, dt.getDate(), h, m];
-}
-
-// Build weekly RRULE between start/end using BYDAY
-function buildWeeklyRRule(days, endDate) {
-  // UNTIL must be in UTC in format YYYYMMDDT000000Z. We'll set UNTIL to 23:59:59 local of endDate, but convert to UTC by just using date part.
-  const end = new Date(endDate);
-  const y = end.getUTCFullYear();
-  const m = String(end.getUTCMonth() + 1).padStart(2, "0");
-  const d = String(end.getUTCDate()).padStart(2, "0");
-  const until = `${y}${m}${d}T235959Z`;
-  return `FREQ=WEEKLY;BYDAY=${days.join(",")};UNTIL=${until}`;
-}
-
 function loadGapiScript() {
   return new Promise((resolve, reject) => {
     if (window.gapi) return resolve();
@@ -374,107 +342,6 @@ async function ensureToken() {
     tokenClient.requestAccessToken({ prompt: accessToken ? "none" : "consent", scope: SCOPES });
   });
 }
-
-const DOW = { SU:0, MO:1, TU:2, WE:3, TH:4, FR:5, SA:6 };
-
-function firstOccurrenceOnOrAfter(isoDate, days) {
-  const [y, m, d] = isoDate.split("-").map(Number);
-  const start = new Date(y, m - 1, d);        // local midnight
-  const wanted = new Set(days.map(d => DOW[d]));
-  for (let i = 0; i < 7; i++) {
-    const t = new Date(start);
-    t.setDate(start.getDate() + i);
-    if (wanted.has(t.getDay())) {
-      const pad = n => String(n).padStart(2, "0");
-      return `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}`;
-    }
-  }
-  return isoDate; // fallback
-}
-
-function buildDateTimeLocal(isoDateOrDate, hour, minute) {
-  let y, m, d;
-  if (typeof isoDateOrDate === "string") {
-    [y, m, d] = isoDateOrDate.split("-").map(Number);
-  } else {
-    y = isoDateOrDate.getFullYear();
-    m = isoDateOrDate.getMonth() + 1;
-    d = isoDateOrDate.getDate();
-  }
-  const pad = n => String(n).padStart(2, "0");
-  // IMPORTANT: no trailing Z — keep it local and supply timeZone separately
-  return `${y}-${pad(m)}-${pad(d)}T${pad(hour)}:${pad(minute)}:00`;
-}
-
-// Expand ["2025-10-04","2025-10-07"] to each ISO date; pass-through single dates.
-// IMPORTANT: parse/build using local time to avoid UTC -> local day shifts.
-function expandDaysOff(spec) {
-  const out = [];
-
-  const makeLocalDate = (iso) => {
-    const [y, m, d] = iso.split("-").map(Number);
-    return new Date(y, m - 1, d); // local midnight
-  };
-  const toIso = (dateObj) => {
-    const y = dateObj.getFullYear();
-    const m = String(dateObj.getMonth() + 1).padStart(2, "0");
-    const d = String(dateObj.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
-  };
-
-  const iterRangeLocal = (startIso, endIso) => {
-    const start = makeLocalDate(startIso);
-    const end = makeLocalDate(endIso);
-    for (let cur = new Date(start); cur <= end; cur.setDate(cur.getDate() + 1)) {
-      out.push(toIso(cur));
-    }
-  };
-
-  for (const item of spec) {
-    if (Array.isArray(item)) iterRangeLocal(item[0], item[1]);
-    else out.push(item);
-  }
-
-  return out;
-}
-
-
-// Map for weekday codes
-const ISO_DOW = { 0:"SU", 1:"MO", 2:"TU", 3:"WE", 4:"TH", 5:"FR", 6:"SA" };
-
-// Returns true if an ISO date (YYYY-MM-DD) matches any BYDAY in `days` (["MO","WE",...])
-function isoMatchesByDay(isoDate, days) {
-  const [y,m,d] = isoDate.split("-").map(Number);
-  const wd = new Date(y, m - 1, d).getDay(); // 0..6 (Sun..Sat)
-  return days.includes(ISO_DOW[wd]);
-}
-
-// Build EXDATEs as DATE-TIME (must match DTSTART's type), with TZID and the meeting's local start time.
-// Example: EXDATE;TZID=America/Chicago:20251004T113000
-function buildExdateDateTimeLines({ isoDates, startHour, startMinute, tz, byDays }) {
-  if (!isoDates?.length) return [];
-  // only exclude dates that actually fall on the class BYDAY set
-  const candidates = isoDates.filter(d => isoMatchesByDay(d, byDays));
-  if (!candidates.length) return [];
-
-  const stamp = (iso) => {
-    const [y,m,d] = iso.split("-");
-    const h = String(startHour).padStart(2, "0");
-    const mm = String(startMinute).padStart(2, "0");
-    return `${y}${m}${d}T${h}${mm}00`;
-  };
-
-  // Google accepts multiple date-times on one EXDATE line; chunk for readability
-  const vals = candidates.map(stamp);
-  const CHUNK = 20;
-  const lines = [];
-  for (let i = 0; i < vals.length; i += CHUNK) {
-    lines.push(`EXDATE;TZID=${tz}:${vals.slice(i, i + CHUNK).join(",")}`);
-  }
-  return lines;
-}
-
-
 
 function displayDatePlusOne(iso) {
   if (typeof iso !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso || "";
@@ -780,35 +647,29 @@ function App() {
         const { days, startTime, endTime, location } = mp;
         const [sh, sm] = parseHourMinute(startTime);
         const [eh, em] = parseHourMinute(endTime);
-  
-        const firstDate = firstOccurrenceOnOrAfter(r.startDate, days);
-        
-        // days-off within the course window
-        const offWithinCourse = allDaysOff.filter(d => d >= r.startDate && d <= r.endDate);
-        
-        // Build EXDATE as DATE-TIME (matching DTSTART) with TZID and local start time
-        const exdateLines = buildExdateDateTimeLines({
-          isoDates: offWithinCourse,
+        const event = buildRecurringCourseEvent({
+          days,
+          startDate: r.startDate,
+          endDate: r.endDate,
           startHour: sh,
           startMinute: sm,
+          endHour: eh,
+          endMinute: em,
           tz,
-          byDays: days,
+          daysOff: allDaysOff,
         });
         
-        const event = {
+        const fullEvent = {
           summary: `${r.course}${r.section ? ` (${r.section})` : ""}`,
           location,
-          start: { dateTime: buildDateTimeLocal(firstDate, sh, sm), timeZone: tz },
-          end:   { dateTime: buildDateTimeLocal(firstDate, eh, em), timeZone: tz },
-          recurrence: [
-            `RRULE:${buildWeeklyRRule(days, r.endDate)}`,
-            ...exdateLines,
-          ],
+          start: event.start,
+          end: event.end,
+          recurrence: event.recurrence,
         };        
   
         await window.gapi.client.calendar.events.insert({
           calendarId: targetCalId || "primary",
-          resource: event,
+          resource: fullEvent,
         });
       }
   
