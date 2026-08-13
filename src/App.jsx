@@ -177,6 +177,43 @@ function InstructionsPanel() {
   );
 }
 
+function FaqPanel() {
+  const faqs = [
+    {
+      q: "Is this Workday to Google Calendar converter free?",
+      a: "Yes. The tool is free and runs entirely in your browser — your schedule file is never uploaded to a server.",
+    },
+    {
+      q: "Does it skip academic breaks and holidays?",
+      a: "Yes. Breaks such as fall break, Thanksgiving, and spring break are excluded automatically, so no class events appear on days you are off. The built-in break dates follow the WashU academic calendar.",
+    },
+    {
+      q: "Does it work for schools other than WashU?",
+      a: "The parser reads any Workday class schedule XLSX export with the standard Course Listing, Section, Meeting Patterns, Start Date, and End Date columns. Because the pre-loaded break dates follow the WashU calendar, students at other schools may need to remove break days manually.",
+    },
+    {
+      q: "Can I download an ICS file instead of using Google Calendar?",
+      a: "Yes. The tool generates standard ICS calendar events, which can be imported into Google Calendar, Apple Calendar, or Outlook.",
+    },
+  ];
+
+  return (
+    <Card className="mt-6">
+      <CardHeader>
+        <CardTitle>Frequently asked questions</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {faqs.map((f, i) => (
+          <div key={i}>
+            <h3 className="font-medium text-sm">{f.q}</h3>
+            <p className="text-sm text-slate-600 mt-1">{f.a}</p>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
 // Util: normalize "URBAUER, Room 00222" → "Urbauer 222"
 function normalizeLocation(locationRaw) {
   if (!locationRaw) return "";
@@ -709,10 +746,15 @@ function App() {
 
   return (
     <div className="min-h-screen flex justify-center bg-white">
-      <div className="w-full max-w-3xl px-4">
-      <h1 className="text-2xl md:text-3xl font-semibold text-slate-900 mb-2.5">
-        WashU Workday to ICS Converter
+      {/* pb clears the fixed FooterBar so the last card isn't hidden behind it */}
+      <div className="w-full max-w-3xl px-4 pb-16">
+      <h1 className="text-2xl md:text-3xl font-semibold text-slate-900 mb-1.5">
+        WashU Workday to Google Calendar Converter
       </h1>
+      <p className="text-sm text-slate-600 mb-2.5">
+        Convert your WashU Workday class schedule into recurring Google Calendar events.
+        Works with any Workday XLSX export; academic breaks are pre-loaded for WashU terms.
+      </p>
         <Card className="shadow-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-xl ">
@@ -888,6 +930,7 @@ function App() {
 
         </Card>
             <InstructionsPanel />
+            <FaqPanel />
       </div>
       <FooterBar />
     </div>
